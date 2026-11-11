@@ -1,4 +1,5 @@
 using MySql.Data.MySqlClient;
+using MySqlX.XDevAPI.Common;
 using RolES.Backend.Dados;
 using RolES.Backend.DTOs;
 using RolES.Backend.Servicos;
@@ -32,12 +33,12 @@ app.MapGet("/", () => // Metodo sem nome
     });
 });
 
-app.MapPost("/usuario", async (CadastroUsuarioDto requestBody, UsuarioServicos uServicos) =>
+app.MapPost("/usuario", async (CadastroUsuarioDto corpoRequisicao, UsuarioServicos uServicos) =>
 {
     try
     {
-        var linhasAfetadas = await uServicos.AdicionarAsync(requestBody);
-        
+        var linhasAfetadas = await uServicos.AdicionarAsync(corpoRequisicao);
+
         if (linhasAfetadas > 0) return Results.Created();
 
         return Results.Conflict(new
@@ -51,6 +52,32 @@ app.MapPost("/usuario", async (CadastroUsuarioDto requestBody, UsuarioServicos u
                 Mensagem = "O e-mail do usuário já consta cadastrado."
             });
         throw;
+    }
+    catch
+    {
+        return Results.InternalServerError();
+    }
+});
+
+app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao, UsuarioServicos uServicos) =>
+{
+    try
+    {
+        var usuarioEncontrado = await uServicos.BuscarPorEmailAsync(corpoRequisicao.Email);
+
+        if (usuarioEncontrado == null)
+            return Results.NotFound(new
+            {
+                Mensagem = "O usuário não foi encontrado."
+            });
+
+        if (corpoRequisicao.Senha != usuarioEncontrado.Senha)
+            return Results.BadRequest(new
+            {
+                Mensagem = "Email/senha estão incorretos."
+            });
+
+        return Results.Ok();
     }
     catch
     {
