@@ -9,7 +9,7 @@ public class UsuarioServicos(BdConexao conexao)
 {
     public async Task<int> AdicionarAsync(Usuario usuario)
     {
-        var sql =
+        const string sql =
             "INSERT INTO usuarios(nome, email, nascimento, senha, cargo) VALUES(@nome, @email, @nascimento, @senha, 'comum')";
 
         var mySqlComando = new MySqlCommand(sql, await conexao.CriarConexaoAsync());
@@ -27,7 +27,7 @@ public class UsuarioServicos(BdConexao conexao)
 
     public async Task<Usuario?> BuscarPorEmailAsync(string emailBuscado)
     {
-        var sql = "SELECT id, nome, email, nascimento, senha FROM usuarios WHERE email = @email";
+        const string sql = "SELECT id, nome, email, nascimento, senha FROM usuarios WHERE email = @email";
 
         var mySqlComando = new MySqlCommand(sql, await conexao.CriarConexaoAsync());
 
@@ -43,7 +43,7 @@ public class UsuarioServicos(BdConexao conexao)
             leitor["email"].ToString() ?? string.Empty,
             leitor["senha"].ToString() ?? string.Empty,
             DateOnly.FromDateTime(leitor.GetDateTime(leitor.GetOrdinal("nascimento")))
-            );
+        );
 
         return usuarioEncontrado;
     }

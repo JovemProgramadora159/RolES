@@ -97,21 +97,23 @@ app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao,
         throw new RequisicaoInvalidaException("O email/senha estão incorretos.");
 
     var tokenAcesso = tServicos.GerarToken(usuarioEncontrado);
-    var tokenAtualizacao = tServicos.GerarRefreshToken();
+    var tokenAtualizacao = TokenServicos.GerarRefreshToken();
+    var expiracaoRefreshToken = DateTime.UtcNow.AddDays(7);
 
     var opcoesCookie = new CookieOptions
     {
         HttpOnly = true,
         Secure = true,
         IsEssential = true,
-        Expires = DateTime.UtcNow.AddDays(7),
+        Expires = expiracaoRefreshToken,
         SameSite = SameSiteMode.Strict
     };
     httpContext.Response.Cookies.Append("token_atualizacao", tokenAtualizacao, opcoesCookie);
+    await tServicos.SalvarRefreshTokenAsync(usuarioEncontrado.Id, tokenAtualizacao, expiracaoRefreshToken);
 
     opcoesCookie.Expires = DateTime.UtcNow.AddMinutes(15);
     httpContext.Response.Cookies.Append("token_acesso", tokenAcesso, opcoesCookie);
-
+    
     return Results.Ok();
 });
 
