@@ -117,4 +117,6 @@ app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao,
     return Results.Ok();
 });
 
+app.MapPost("/refresh", () => { });
+
 app.Run();

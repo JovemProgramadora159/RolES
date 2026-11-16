@@ -15,9 +15,11 @@ public class TokenServicos(IConfiguration configuracao, BdConexao conexao)
     private readonly string _chave = configuracao["JWT_CHAVE"] ??
                                      throw new ArgumentNullException(configuracao["JWT_CHAVE"],
                                          "A chave JWT não está configurada corretamente!");
+
     private readonly string _emissor = configuracao["JWT_EMISSOR"] ??
                                        throw new ArgumentNullException(configuracao["JWT_EMISSOR"],
                                            "O emissor JWT não está configurado corretamente!");
+
     private readonly string _audiencia = configuracao["JWT_AUDIENCIA"] ??
                                          throw new ArgumentNullException(configuracao["JWT_AUDIENCIA"],
                                              "A audiencia JWT não está configurada corretamente!");
@@ -59,15 +61,46 @@ public class TokenServicos(IConfiguration configuracao, BdConexao conexao)
 
     public async Task SalvarRefreshTokenAsync(int usuarioId, string token, DateTime expiracao)
     {
-        const string sql = "INSERT INTO tokens_atualizacao(usuario_id, token, data_expiracao, revogado) VALUES (@usuarioId, @token, @expiracao, 0)";
+        const string sql =
+            "INSERT INTO tokens_atualizacao(usuario_id, token, data_expiracao, revogado) VALUES (@usuarioId, @token, @expiracao, 0)";
 
         await using var conexaoDb = await conexao.CriarConexaoAsync();
         await using var comando = new MySqlCommand(sql, conexaoDb);
 
         comando.Parameters.AddWithValue("@usuarioId", usuarioId);
         comando.Parameters.AddWithValue("@token", token);
-        comando.Parameters.AddWithValue("@expiracao", expiracao.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        comando.Parameters.AddWithValue("@expiracao",
+            expiracao.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
 
         await comando.ExecuteNonQueryAsync();
     }
-}   
+
+    public async Task<int?> ValidarRefreshTokenAsync(string token)
+    {
+        const string sql = """
+                           SELECT usuario_id, data_expiracao, revogado 
+                           FROM tokens_atualizacao
+                           WHERE token = @token
+                           """;
+        await using var conexaoDb = await conexao.CriarConexaoAsync();
+        await using var comando = new MySqlCommand(sql, conexaoDb);
+        comando.Parameters.AddWithValue("@token", token);
+
+        await using var leitor = await comando.ExecuteReaderAsync();
+
+        if (!await leitor.ReadAsync()) return null;
+
+        var revogado = leitor.GetBoolean(leitor.GetOrdinal("revogado"));
+        var expiracao = leitor.GetDateTime(leitor.GetOrdinal("data_expiracao"));
+        var usuarioId = leitor.GetInt32(leitor.GetOrdinal("usuario_id"));
+
+        if (revogado || expiracao <= DateTime.UtcNow) return null;
+
+        return usuarioId;
+    }
+
+    public async Task RevogarRefreshTokenAsync(string token)
+    {
+        
+    }
+}
