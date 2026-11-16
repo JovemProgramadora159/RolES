@@ -1,3 +1,6 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using MySql.Data.MySqlClient;
 using RolES.Backend.Dados;
 using RolES.Backend.DTOs;
@@ -10,6 +13,37 @@ builder.Services.AddOpenApi();
 // Cadastro de Serviços Customizados
 builder.Services.AddSingleton<BdConexao>();
 builder.Services.AddScoped<UsuarioServicos>();
+builder.Services.AddScoped<TokenServicos>();
+
+// Cadastro de JWT Bearer
+builder.Services.AddAuthentication(modelos =>
+{
+    modelos.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    modelos.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(configuracaoJwt =>
+{
+    var configuracaoApp = builder.Configuration;
+
+    configuracaoJwt.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = configuracaoApp["JWT_EMISSOR"],
+        ValidateAudience = true,
+        ValidAudience = configuracaoApp["JWT_AUDIENCIA"],
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuracaoApp["JWT_CHAVE"]!))
+    };
+
+    configuracaoJwt.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = contexto =>
+        {
+            contexto.Token = contexto.Request.Cookies["token_acesso"];
+            return Task.CompletedTask;
+        }
+    };
+});
 
 var app = builder.Build();
 
@@ -54,7 +88,10 @@ app.MapPost("/usuario", async (CadastroUsuarioDto corpoRequisicao, UsuarioServic
     }
 });
 
-app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao, UsuarioServicos uServicos) =>
+app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao,
+    HttpContext httpContext,
+    UsuarioServicos uServicos,
+    TokenServicos tServicos) =>
 {
     try
     {
@@ -71,6 +108,24 @@ app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao, UsuarioServicos uS
             {
                 Mensagem = "O email/senha estão incorretos."
             });
+
+        var tokenAcesso = tServicos.GerarToken(usuarioEncontrado);
+        var tokenAtualizacao = tServicos.GerarRefreshToken();
+
+        var opcoesCookie = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            IsEssential = true,
+            Expires = DateTime.UtcNow.AddDays(7),
+            SameSite = SameSiteMode.Strict
+        };
+
+        httpContext.Response.Cookies.Append("token_atualizacao", tokenAtualizacao, opcoesCookie);
+
+        opcoesCookie.Expires = DateTime.UtcNow.AddMinutes(15);
+        
+        httpContext.Response.Cookies.Append("token_acesso", tokenAcesso, opcoesCookie);
 
         return Results.Ok();
     }

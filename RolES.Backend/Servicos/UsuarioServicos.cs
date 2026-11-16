@@ -1,4 +1,5 @@
-﻿using MySql.Data.MySqlClient;
+﻿using System.Globalization;
+using MySql.Data.MySqlClient;
 using RolES.Backend.Dados;
 using RolES.Backend.DTOs;
 using RolES.Backend.Modelos;
@@ -16,7 +17,8 @@ public class UsuarioServicos(BdConexao conexao)
 
         mySqlComando.Parameters.AddWithValue("@nome", modelo.Nome);
         mySqlComando.Parameters.AddWithValue("@email", modelo.Email);
-        mySqlComando.Parameters.AddWithValue("@nascimento", modelo.Nascimento.ToString("yyyy-MM-dd"));
+        mySqlComando.Parameters.AddWithValue("@nascimento",
+            modelo.Nascimento.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         mySqlComando.Parameters.AddWithValue("@senha", modelo.Senha);
 
         var linhasAfetadas = await mySqlComando.ExecuteNonQueryAsync();
@@ -26,7 +28,7 @@ public class UsuarioServicos(BdConexao conexao)
 
     public async Task<Usuario?> BuscarPorEmailAsync(string emailBuscado)
     {
-        var sql = "SELECT id, nome, senha FROM usuarios WHERE email = @email";
+        var sql = "SELECT id, nome, email, senha FROM usuarios WHERE email = @email";
 
         var mySqlComando = new MySqlCommand(sql, await conexao.CriarConexaoAsync());
 
@@ -34,18 +36,16 @@ public class UsuarioServicos(BdConexao conexao)
 
         var leitor = await mySqlComando.ExecuteReaderAsync();
 
-        if (await leitor.ReadAsync())
+        if (!await leitor.ReadAsync()) return null;
+
+        var usuarioEncontrado = new Usuario
         {
-            var usuarioEncontrado = new Usuario
-            {
-                Id = leitor.GetInt32(leitor.GetOrdinal("id")),
-                Nome = leitor["nome"].ToString() ?? string.Empty,
-                Senha = leitor["senha"].ToString() ?? string.Empty
-            };
+            Id = leitor.GetInt32(leitor.GetOrdinal("id")),
+            Nome = leitor["nome"].ToString() ?? string.Empty,
+            Senha = leitor["senha"].ToString() ?? string.Empty,
+            Email = leitor["email"].ToString() ?? string.Empty
+        };
 
-            return usuarioEncontrado;
-        }
-
-        return null;
+        return usuarioEncontrado;
     }
 }
