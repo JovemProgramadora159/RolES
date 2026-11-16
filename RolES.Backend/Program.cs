@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -45,6 +46,7 @@ builder.Services.AddAuthentication(modelos =>
         }
     };
 });
+builder.Services.AddAuthorization();
 
 // Adiciona middleware de excecoes
 builder.Services.AddExceptionHandler<ManipuladorGlobalExcecoes>();
@@ -52,12 +54,12 @@ builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-    app.MapOpenApi();
-else
-    app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment()) app.MapOpenApi();
+else app.UseHttpsRedirection();
 
 app.UseExceptionHandler();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/", () => // Metodo sem nome
 {
@@ -97,13 +99,13 @@ app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao,
         throw new RequisicaoInvalidaException("O email/senha estão incorretos.");
 
     var tokenAcesso = tServicos.GerarToken(usuarioEncontrado);
-    var tokenAtualizacao = TokenServicos.GerarRefreshToken();
+    var tokenAtualizacao = tServicos.GerarRefreshToken();
     var expiracaoRefreshToken = DateTime.UtcNow.AddDays(7);
 
     var opcoesCookie = new CookieOptions
     {
         HttpOnly = true,
-        Secure = true,
+        Secure = !app.Environment.IsDevelopment(),
         IsEssential = true,
         Expires = expiracaoRefreshToken,
         SameSite = SameSiteMode.Strict
@@ -113,10 +115,68 @@ app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao,
 
     opcoesCookie.Expires = DateTime.UtcNow.AddMinutes(15);
     httpContext.Response.Cookies.Append("token_acesso", tokenAcesso, opcoesCookie);
-    
+
     return Results.Ok();
 });
 
-app.MapPost("/refresh", () => { });
+app.MapPost("/refresh", async (HttpContext httpContext, UsuarioServicos uServicos, TokenServicos tServicos) =>
+{
+    if (!httpContext.Request.Cookies.TryGetValue("token_atualizacao", out var refreshTokenAntigo) ||
+        string.IsNullOrEmpty(refreshTokenAntigo))
+    {
+        throw new RequisicaoInvalidaException("Token de atualização ausente.");
+    }
+
+    var usuarioId = await tServicos.ValidarRefreshTokenAsync(refreshTokenAntigo);
+    if (usuarioId == null)
+    {
+        throw new RequisicaoInvalidaException("Token de atualização inválido ou expirado.");
+    }
+
+    var usuario = await uServicos.BuscarPorIdAsync(usuarioId.Value);
+    if (usuario == null)
+    {
+        throw new NaoEncontradoException("Usuário não encontrado.");
+    }
+
+    await tServicos.RevogarRefreshTokenAsync(refreshTokenAntigo);
+
+    var novoTokenAcesso = tServicos.GerarToken(usuario);
+    var novoRefreshToken = tServicos.GerarRefreshToken();
+    var expiracaoRefreshToken = DateTime.UtcNow.AddDays(7);
+
+    await tServicos.SalvarRefreshTokenAsync(usuario.Id, novoRefreshToken, expiracaoRefreshToken);
+
+    var opcoesCookie = new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = !app.Environment.IsDevelopment(),
+        IsEssential = true,
+        Expires = expiracaoRefreshToken,
+        SameSite = SameSiteMode.Strict
+    };
+
+    httpContext.Response.Cookies.Append("token_atualizacao", novoRefreshToken, opcoesCookie);
+
+    opcoesCookie.Expires = DateTime.UtcNow.AddMinutes(15);
+    httpContext.Response.Cookies.Append("token_acesso", novoTokenAcesso, opcoesCookie);
+
+    return Results.Ok();
+});
+
+app.MapGet("/eu", (ClaimsPrincipal usuario) =>
+    {
+        var id = usuario.FindFirstValue(ClaimTypes.NameIdentifier);
+        var nome = usuario.FindFirstValue(ClaimTypes.Name);
+        var email = usuario.FindFirstValue(ClaimTypes.Email);
+
+        return Results.Ok(new
+        {
+            Id = id,
+            Nome = nome,
+            Email = email
+        });
+    })
+    .RequireAuthorization();
 
 app.Run();

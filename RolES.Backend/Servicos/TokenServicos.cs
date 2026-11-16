@@ -35,6 +35,7 @@ public class TokenServicos(IConfiguration configuracao, BdConexao conexao)
         {
             Subject = new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
+                new Claim(ClaimTypes.Name, usuario.Nome),
                 new Claim(ClaimTypes.Email, usuario.Email)
             ]),
             Issuer = _emissor,
@@ -51,7 +52,7 @@ public class TokenServicos(IConfiguration configuracao, BdConexao conexao)
         return manipuladorToken.WriteToken(token);
     }
 
-    public static string GerarRefreshToken()
+    public string GerarRefreshToken()
     {
         var numeroAleatorio = new byte[64];
         using var rng = RandomNumberGenerator.Create();
@@ -101,6 +102,12 @@ public class TokenServicos(IConfiguration configuracao, BdConexao conexao)
 
     public async Task RevogarRefreshTokenAsync(string token)
     {
-        
+        const string sql = "UPDATE tokens_atualizacao SET revogado = 1 WHERE token = @token";
+
+        await using var conexaoDb = await conexao.CriarConexaoAsync();
+        await using var comando = new MySqlCommand(sql, conexaoDb);
+        comando.Parameters.AddWithValue("@token", token);
+
+        await comando.ExecuteNonQueryAsync();
     }
 }

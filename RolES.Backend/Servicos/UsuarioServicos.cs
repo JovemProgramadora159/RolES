@@ -12,7 +12,8 @@ public class UsuarioServicos(BdConexao conexao)
         const string sql =
             "INSERT INTO usuarios(nome, email, nascimento, senha, cargo) VALUES(@nome, @email, @nascimento, @senha, 'comum')";
 
-        var mySqlComando = new MySqlCommand(sql, await conexao.CriarConexaoAsync());
+        await using var conexaoDb = await conexao.CriarConexaoAsync();
+        await using var mySqlComando = new MySqlCommand(sql, conexaoDb);
 
         mySqlComando.Parameters.AddWithValue("@nome", usuario.Nome);
         mySqlComando.Parameters.AddWithValue("@email", usuario.Email);
@@ -29,11 +30,36 @@ public class UsuarioServicos(BdConexao conexao)
     {
         const string sql = "SELECT id, nome, email, nascimento, senha FROM usuarios WHERE email = @email";
 
-        var mySqlComando = new MySqlCommand(sql, await conexao.CriarConexaoAsync());
+        await using var conexaoDb = await conexao.CriarConexaoAsync(); 
+        await using var mySqlComando = new MySqlCommand(sql, conexaoDb);
 
         mySqlComando.Parameters.AddWithValue("@email", emailBuscado);
 
-        var leitor = await mySqlComando.ExecuteReaderAsync();
+        await using var leitor = await mySqlComando.ExecuteReaderAsync();
+
+        if (!await leitor.ReadAsync()) return null;
+
+        var usuarioEncontrado = new Usuario(
+            leitor.GetInt32(leitor.GetOrdinal("id")),
+            leitor["nome"].ToString() ?? string.Empty,
+            leitor["email"].ToString() ?? string.Empty,
+            leitor["senha"].ToString() ?? string.Empty,
+            DateOnly.FromDateTime(leitor.GetDateTime(leitor.GetOrdinal("nascimento")))
+        );
+
+        return usuarioEncontrado;
+    }
+
+    public async Task<Usuario?> BuscarPorIdAsync(int usuarioId)
+    {
+        const string sql = "SELECT id, nome, email, nascimento, senha FROM usuarios WHERE id = @id";
+
+        await using var conexaoDb = await conexao.CriarConexaoAsync();
+        await using var mySqlComando = new MySqlCommand(sql, conexaoDb);
+
+        mySqlComando.Parameters.AddWithValue("@id", usuarioId);
+
+        await using var leitor = await mySqlComando.ExecuteReaderAsync();
 
         if (!await leitor.ReadAsync()) return null;
 
