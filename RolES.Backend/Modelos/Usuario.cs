@@ -1,4 +1,5 @@
 ﻿using RolES.Backend.DTOs;
+using RolES.Backend.Excecoes;
 
 namespace RolES.Backend.Modelos;
 
@@ -36,11 +37,11 @@ public class Usuario
     private static void Validar(string nome, string email, string senha)
     {
         if (string.IsNullOrWhiteSpace(nome))
-            throw new ArgumentException("O nome do usuário é obrigatório.", nome);
+            throw new RequisicaoInvalidaException("O nome do usuário é obrigatório.");
         if (string.IsNullOrWhiteSpace(email))
-            throw new ArgumentException("O e-mail do usuário é obrigatório.", email);
+            throw new RequisicaoInvalidaException("O e-mail do usuário é obrigatório.");
         if (string.IsNullOrWhiteSpace(senha))
-            throw new ArgumentException("A senha do usuário é obrigatório.", senha);
+            throw new RequisicaoInvalidaException("A senha do usuário é obrigatório.");
         
     }
 }
