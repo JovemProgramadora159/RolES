@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using MySql.Data.MySqlClient;
 using RolES.Backend.Dados;
 using RolES.Backend.DTOs;
+using RolES.Backend.Modelos;
 using RolES.Backend.Servicos;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,7 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 // Cadastro de Serviços Customizados
-builder.Services.AddSingleton<BdConexao>();
+builder.Services.AddScoped<BdConexao>();
 builder.Services.AddScoped<UsuarioServicos>();
 builder.Services.AddScoped<TokenServicos>();
 
@@ -66,7 +67,11 @@ app.MapPost("/usuario", async (CadastroUsuarioDto corpoRequisicao, UsuarioServic
 {
     try
     {
-        var linhasAfetadas = await uServicos.AdicionarAsync(corpoRequisicao);
+        var novoUsuario = new Usuario(corpoRequisicao.Nome,
+            corpoRequisicao.Email,
+            corpoRequisicao.Senha,
+            corpoRequisicao.Nascimento);
+        var linhasAfetadas = await uServicos.AdicionarAsync(novoUsuario);
 
         if (linhasAfetadas > 0) return Results.Created();
 
@@ -82,8 +87,16 @@ app.MapPost("/usuario", async (CadastroUsuarioDto corpoRequisicao, UsuarioServic
             });
         throw;
     }
-    catch
+    catch (ArgumentException exception)
     {
+        return Results.BadRequest(new
+        {
+            Mensagem = exception.Message
+        });
+    }
+    catch(Exception exception)
+    {
+        Console.WriteLine(exception.Message);
         return Results.InternalServerError();
     }
 });
@@ -124,7 +137,7 @@ app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao,
         httpContext.Response.Cookies.Append("token_atualizacao", tokenAtualizacao, opcoesCookie);
 
         opcoesCookie.Expires = DateTime.UtcNow.AddMinutes(15);
-        
+
         httpContext.Response.Cookies.Append("token_acesso", tokenAcesso, opcoesCookie);
 
         return Results.Ok();
