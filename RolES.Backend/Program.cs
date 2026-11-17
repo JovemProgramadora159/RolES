@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using RolES.Backend.Dados;
 using RolES.Backend.DTOs;
 using RolES.Backend.Excecoes;
+using RolES.Backend.Extensoes;
 using RolES.Backend.Modelos;
 using RolES.Backend.Servicos;
 
@@ -92,29 +93,10 @@ app.MapPost("/login", async (LoginUsuarioDto corpoRequisicao,
 {
     var usuarioEncontrado = await uServicos.BuscarPorEmailAsync(corpoRequisicao.Email);
 
-    if (usuarioEncontrado == null)
-        throw new NaoEncontradoException("O usuário não foi encontrado.");
+    if (usuarioEncontrado == null || corpoRequisicao.Senha != usuarioEncontrado.Senha)
+        throw new RequisicaoInvalidaException("E-mail ou senha incorretos.");
 
-    if (corpoRequisicao.Senha != usuarioEncontrado.Senha)
-        throw new RequisicaoInvalidaException("O email/senha estão incorretos.");
-
-    var tokenAcesso = tServicos.GerarToken(usuarioEncontrado);
-    var tokenAtualizacao = tServicos.GerarRefreshToken();
-    var expiracaoRefreshToken = DateTime.UtcNow.AddDays(7);
-
-    var opcoesCookie = new CookieOptions
-    {
-        HttpOnly = true,
-        Secure = !app.Environment.IsDevelopment(),
-        IsEssential = true,
-        Expires = expiracaoRefreshToken,
-        SameSite = SameSiteMode.Strict
-    };
-    httpContext.Response.Cookies.Append("token_atualizacao", tokenAtualizacao, opcoesCookie);
-    await tServicos.SalvarRefreshTokenAsync(usuarioEncontrado.Id, tokenAtualizacao, expiracaoRefreshToken);
-
-    opcoesCookie.Expires = DateTime.UtcNow.AddMinutes(15);
-    httpContext.Response.Cookies.Append("token_acesso", tokenAcesso, opcoesCookie);
+    await httpContext.EmitirSessaoAutenticacaoAsync(usuarioEncontrado, tServicos, app.Environment.IsDevelopment());
 
     return Results.Ok();
 });
@@ -141,26 +123,7 @@ app.MapPost("/refresh", async (HttpContext httpContext, UsuarioServicos uServico
 
     await tServicos.RevogarRefreshTokenAsync(refreshTokenAntigo);
 
-    var novoTokenAcesso = tServicos.GerarToken(usuario);
-    var novoRefreshToken = tServicos.GerarRefreshToken();
-    var expiracaoRefreshToken = DateTime.UtcNow.AddDays(7);
-
-    await tServicos.SalvarRefreshTokenAsync(usuario.Id, novoRefreshToken, expiracaoRefreshToken);
-
-    var opcoesCookie = new CookieOptions
-    {
-        HttpOnly = true,
-        Secure = !app.Environment.IsDevelopment(),
-        IsEssential = true,
-        Expires = expiracaoRefreshToken,
-        SameSite = SameSiteMode.Strict
-    };
-
-    httpContext.Response.Cookies.Append("token_atualizacao", novoRefreshToken, opcoesCookie);
-
-    opcoesCookie.Expires = DateTime.UtcNow.AddMinutes(15);
-    httpContext.Response.Cookies.Append("token_acesso", novoTokenAcesso, opcoesCookie);
-
+    await httpContext.EmitirSessaoAutenticacaoAsync(usuario, tServicos, app.Environment.IsDevelopment());
     return Results.Ok();
 });
 
