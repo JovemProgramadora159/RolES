@@ -6,18 +6,18 @@
 
 <h1>Login</h1>
 
-<form @onsubmit="EnviarDadosParaApi">
+<form @onsubmit="EnviarDadosParaApi" >
     <label>
         E-mail
         <input type="email" required @bind-value="_dadosEnvio.Email"/>
     </label>
 
     <label>
-        Senha
+        Senha 
         <input type="password" required autocomplete="current-password" @bind-value="_dadosEnvio.Senha"/>
     </label>
 
-    <button type="submit">Entrar na Conta</button>
+    <button class="btn btn-primary" type="submit">Entrar na Conta</button>
 </form>
 
 @code {
